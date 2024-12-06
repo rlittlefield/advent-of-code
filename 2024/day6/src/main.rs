@@ -4,8 +4,9 @@ use anyhow::Result;
 use std::collections::HashSet;
 use std::thread::sleep;
 use std::time::Duration;
+use std::io::{self, Write};
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Hash, Copy, Clone)]
 enum Direction {
     North,
     East,
@@ -13,12 +14,56 @@ enum Direction {
     West
 }
 
+
+fn render_map(map: &Vec<Vec<char>>, visited: &HashSet<(i32, i32)>, obstacle: Option<(&i32, &i32)>) {
+    println!("NEW");
+    for (y, row) in map.iter().enumerate() {
+        let new_row: String = row.iter().enumerate().map(|(x, c)| {
+            if let Some((obstacle_x, obstacle_y)) = obstacle {
+                if x as i32 == *obstacle_x && y as i32 == *obstacle_y  {
+                    // render the obstacle here!
+                    return '@';
+                }
+            }
+
+            if visited.contains(&(x as i32, y as i32)) {
+                return 'X';
+            }
+
+            return c.clone();
+        }).into_iter().collect();
+
+        println!("{y:03}{}", new_row);
+    }
+}
+
+
 fn main() -> Result<()> {
     let (map, width, height, x, y) = load_map().unwrap();
-    let visits = search(x, y, &width, &height, map)?;
-    // let needs_search = visits.clone();
+    let (_, visits) = search(x.clone(), y.clone(), &width, &height, &map, None)?;
 
     dbg!("fell out of walking with ? visits", visits.len());
+
+    let mut loop_count = 0;
+    for visited_location in visits.iter() {
+
+        // if visited_location != &(26, 98) {
+        //     continue;
+        // }
+        
+        let search_x = &visited_location.0;
+        let search_y = &visited_location.1;
+        let (looped, new_visited) = search(x, y, &width, &height, &map, Some((search_x, search_y)))?;
+
+        if looped {
+            println!("We found a loop: {visited_location:?}");
+            loop_count = loop_count + 1;
+            // render_map(&map, &new_visited, Some((search_x, search_y)));
+        }
+    }
+
+    println!("Found {loop_count:?} loop locations!");
+
     Ok(())
 }
 
@@ -46,27 +91,43 @@ fn load_map() -> Result<(Vec<Vec<char>>, i32, i32, i32, i32)> {
     Ok((map, width, height, x, y))
 }
 
-fn search(mut x: i32, mut y: i32, width: &i32, height: &i32, map: Vec<Vec<char>>) -> Result<HashSet<(i32, i32)>> {
-    let mut visits: HashSet<(i32, i32)> = HashSet::new();
+fn search(mut x: i32, mut y: i32, width: &i32, height: &i32, map: &Vec<Vec<char>>, obstacle: Option<(&i32, &i32)>) -> Result<(bool, HashSet<(i32, i32)>)> {
+    let mut visits: HashSet<(i32, i32)> = HashSet::new(); // this tracks every location we visited
+    let mut directional_visits: HashSet<(i32, i32, Direction)> = HashSet::new(); // this tracks all spots and directions, and shouldn't repeat without a loop
+
     let mut direction: Direction = Direction::North; 
     visits.insert((x, y));
+    directional_visits.insert((x, y, direction));
+    
+
+    let mut obstacle_x = -200;
+    let mut obstacle_y = -200;
+
+    if let Some((&tmp_x, &tmp_y)) = obstacle {
+        obstacle_x = tmp_x;
+        obstacle_y = tmp_y;
+    }
 
     while x > 0 && x < *width && y > 0 && y < *height  {
-        // sleep(Duration::from_millis(1));
-
         let next_location = match direction {
             Direction::North => (x, y - 1),
             Direction::East => (x + 1, y),
             Direction::South => (x, y + 1),
             Direction::West => (x - 1, y)
         };
-
         
-        if next_location.0 < 0 || next_location.0 > *width || next_location.1 < 0 || next_location.1 > *height {
+        if next_location.0 < 0 || next_location.0 > *width - 1 || next_location.1 < 0 || next_location.1 > *height -1 {
             break;
         }
         
-        let next_location_value = &map[next_location.1 as usize][next_location.0 as usize];
+        let next_location_value = if next_location.0 == obstacle_x && next_location.1 == obstacle_y {
+            // this is the searched location. We pretend to find a fake obstacle
+            // note: use the next_location not the current one, or this is going to be weird!
+            &'#'
+        } else {
+            &map[next_location.1 as usize][next_location.0 as usize]
+        };
+         
         
         match next_location_value {
             '#' => {
@@ -85,7 +146,12 @@ fn search(mut x: i32, mut y: i32, width: &i32, height: &i32, map: Vec<Vec<char>>
                 visits.insert((x, y));
             }
         }
+
+        if directional_visits.contains(&(x, y, direction)) {
+            return Ok((true, visits));
+        }
+        directional_visits.insert((x, y, direction));
     }
 
-    Ok(visits)
+    Ok((false, visits))
 }
