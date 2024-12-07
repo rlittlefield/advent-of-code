@@ -1,10 +1,8 @@
-use std::{fs::read_to_string, ops::Index};
-use regex::Regex;
+use std::{fs::read_to_string};
 use anyhow::Result;
 use std::collections::HashSet;
-use std::thread::sleep;
-use std::time::Duration;
-use std::io::{self, Write};
+
+use rayon::prelude::*;
 
 #[derive(Debug, PartialEq, Eq, Hash, Copy, Clone)]
 enum Direction {
@@ -15,27 +13,27 @@ enum Direction {
 }
 
 
-fn render_map(map: &Vec<Vec<char>>, visited: &HashSet<(i32, i32)>, obstacle: Option<(&i32, &i32)>) {
-    println!("NEW");
-    for (y, row) in map.iter().enumerate() {
-        let new_row: String = row.iter().enumerate().map(|(x, c)| {
-            if let Some((obstacle_x, obstacle_y)) = obstacle {
-                if x as i32 == *obstacle_x && y as i32 == *obstacle_y  {
-                    // render the obstacle here!
-                    return '@';
-                }
-            }
+// fn render_map(map: &Vec<Vec<char>>, visited: &HashSet<(i32, i32)>, obstacle: Option<(&i32, &i32)>) {
+//     println!("NEW");
+//     for (y, row) in map.iter().enumerate() {
+//         let new_row: String = row.iter().enumerate().map(|(x, c)| {
+//             if let Some((obstacle_x, obstacle_y)) = obstacle {
+//                 if x as i32 == *obstacle_x && y as i32 == *obstacle_y  {
+//                     // render the obstacle here!
+//                     return '@';
+//                 }
+//             }
 
-            if visited.contains(&(x as i32, y as i32)) {
-                return 'X';
-            }
+//             if visited.contains(&(x as i32, y as i32)) {
+//                 return 'X';
+//             }
 
-            return c.clone();
-        }).into_iter().collect();
+//             return c.clone();
+//         }).into_iter().collect();
 
-        println!("{y:03}{}", new_row);
-    }
-}
+//         println!("{y:03}{}", new_row);
+//     }
+// }
 
 
 fn main() -> Result<()> {
@@ -44,25 +42,18 @@ fn main() -> Result<()> {
 
     dbg!("fell out of walking with ? visits", visits.len());
 
-    let mut loop_count = 0;
-    for visited_location in visits.iter() {
-
-        // if visited_location != &(26, 98) {
-        //     continue;
-        // }
-        
+    let loop_count: i32 = visits.par_iter().map(|visited_location| {
         let search_x = &visited_location.0;
         let search_y = &visited_location.1;
-        let (looped, new_visited) = search(x, y, &width, &height, &map, Some((search_x, search_y)))?;
-
+        let (looped, _new_visited) = search(x, y, &width, &height, &map, Some((search_x, search_y))).unwrap();
         if looped {
-            println!("We found a loop: {visited_location:?}");
-            loop_count = loop_count + 1;
-            // render_map(&map, &new_visited, Some((search_x, search_y)));
+            1
+        } else {
+            0
         }
-    }
+    }).sum();
 
-    println!("Found {loop_count:?} loop locations!");
+    dbg!("Found {loop_count:?} loop locations!", {loop_count});
 
     Ok(())
 }
