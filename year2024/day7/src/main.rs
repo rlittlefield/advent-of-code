@@ -24,13 +24,13 @@ fn main() -> Result<()> {
     let foo: i64 = re.captures_iter(&raw_input).par_bridge().filter_map(|row| {
         let test_value: i64 = row.name("test").expect("no test value").as_str().parse().expect("test value not an int");
         let input_values: Vec<i64> = row.name("values").expect("no input values").as_str().trim().split(" ").filter_map(|num| {
-            num.parse().ok()
+            Some(num.parse().unwrap())
         }).collect_vec();
 
-        let found_match = (0..65535u32).any(|testing_operators| {
+        let found_match = all_ops.iter().any(|testing_operators| {
             // let mut new_testing_operators = make_operators(testing_operators);
             // sleep(Duration::from_millis(1000));
-            let mut new_testing_operators = all_ops.get(testing_operators as usize).unwrap().iter().rev();
+            let mut new_testing_operators = testing_operators.iter().rev();
 
             // dbg!(&new_testing_operators);
 
@@ -52,7 +52,7 @@ fn main() -> Result<()> {
             });
             let found_match = tested_total == &test_value;
             if found_match {
-                let mut used_ops = all_ops.get(testing_operators as usize).unwrap().iter().rev();
+                let mut used_ops = testing_operators.iter().rev();
                 used_ops.next();
 
                 let mut printable_ops = used_ops.map(|i| {
@@ -72,9 +72,9 @@ fn main() -> Result<()> {
                     .flat_map(|(x, y)| vec![x, y])
                     .collect();
 
-                dbg!("Found {:?} with ops", test_value);
+                // dbg!("Found {:?} with ops", test_value);
 
-                dbg!(zipped);
+                // dbg!(zipped);
             }
             found_match
         });
